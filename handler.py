@@ -4,7 +4,7 @@ Image-to-image editing: input image + instruction prompt → edited image.
 Models ~30GB total on R2, cached on network volume.
 
 R2 layout (bucket comfy):
-  comfy-models/qwen-image-edit-2511/diffusion_models/qwen_image_edit_2511_bf16.safetensors
+  comfy-models/qwen-image-edit-2511/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors
   comfy-models/qwen-image-edit-2511/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors
   comfy-models/qwen-image-edit-2511/vae/qwen_image_vae.safetensors
 """
@@ -50,7 +50,7 @@ from botocore.config import Config
 WORKER = "qwen"
 COMFY_DIR = Path(os.environ.get("COMFY_DIR", "/workspace/ComfyUI"))
 COMFY_URL = "http://127.0.0.1:8188"
-UNET = "qwen_image_edit_2511_bf16.safetensors"
+UNET = "qwen_image_edit_2511_fp8mixed.safetensors"
 CLIP = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
 VAE = "qwen_image_vae.safetensors"
 R2_PREFIX = "comfy-models/qwen-image-edit-2511"
@@ -203,7 +203,7 @@ def build_workflow(prompt: str, input_image: str, width: int, height: int,
     return {
         "1": {
             "class_type": "UNETLoader",
-            "inputs": {"unet_name": UNET, "weight_dtype": "bf16"},
+            "inputs": {"unet_name": UNET, "weight_dtype": "fp8_e4m3fn"},
         },
         "2": {
             "class_type": "CLIPLoader",
