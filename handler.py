@@ -221,7 +221,7 @@ def build_workflow(prompt: str, input_image: str, width: int, height: int,
         # Scale input image to target resolution
         "5": {
             "class_type": "ImageScaleToTotalPixels",
-            "inputs": {"image": ["4", 0], "upscale_method": "bicubic", "megapixels": round(width * height / 1e6, 2)},
+            "inputs": {"image": ["4", 0], "upscale_method": "bicubic", "megapixels": round(width * height / 1e6, 2), "resolution_steps": 64},
         },
         # Encode scaled image to latent space
         "6": {
@@ -231,12 +231,12 @@ def build_workflow(prompt: str, input_image: str, width: int, height: int,
         # Edit-aware text encoding (positive) — takes CLIP + VAE + source image + prompt
         "7": {
             "class_type": "TextEncodeQwenImageEditPlus",
-            "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image1": ["5", 0], "text": prompt},
+            "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image1": ["5", 0], "prompt": prompt},
         },
         # Edit-aware text encoding (negative)
         "8": {
             "class_type": "TextEncodeQwenImageEditPlus",
-            "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image1": ["5", 0], "text": ""},
+            "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image1": ["5", 0], "prompt": ""},
         },
         # Model sampling config for Qwen diffusion
         "11": {
@@ -246,7 +246,7 @@ def build_workflow(prompt: str, input_image: str, width: int, height: int,
         # CFG normalization
         "12": {
             "class_type": "CFGNorm",
-            "inputs": {"model": ["11", 0]},
+            "inputs": {"model": ["11", 0], "strength": 1.0},
         },
         # Sampler
         "9": {
