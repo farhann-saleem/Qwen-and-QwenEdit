@@ -199,7 +199,11 @@ def _save_input_image(image_b64: str) -> str:
 
 def build_workflow(prompt: str, input_image: str, width: int, height: int,
                    seed: int, steps: int, cfg: float) -> dict:
-    """Build ComfyUI API workflow for Qwen Image Edit 2511."""
+    """Build ComfyUI API workflow for Qwen Image Edit 2511.
+
+    Matches official workflow: UNETLoader → ModelSamplingAuraFlow → CFGNorm → KSampler,
+    CLIPLoader(qwen_image) → TextEncodeQwenImageEditPlus for edit-aware conditioning.
+    """
     return {
         "1": {
             "class_type": "UNETLoader",
@@ -207,32 +211,51 @@ def build_workflow(prompt: str, input_image: str, width: int, height: int,
         },
         "2": {
             "class_type": "CLIPLoader",
-            "inputs": {"clip_name": CLIP, "type": "qwen2_5vl"},
+            "inputs": {"clip_name": CLIP, "type": "qwen_image"},
         },
         "3": {"class_type": "VAELoader", "inputs": {"vae_name": VAE}},
         "4": {
             "class_type": "LoadImage",
             "inputs": {"image": input_image},
         },
+        # Scale input image to target resolution
         "5": {
-            "class_type": "VAEEncode",
-            "inputs": {"vae": ["3", 0], "pixels": ["4", 0]},
+            "class_type": "ImageScaleToTotalPixels",
+            "inputs": {"image": ["4", 0], "upscale_method": "bicubic", "megapixels": round(width * height / 1e6, 2)},
         },
+        # Encode scaled image to latent space
         "6": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["2", 0], "text": prompt},
+            "class_type": "VAEEncode",
+            "inputs": {"vae": ["3", 0], "pixels": ["5", 0]},
         },
+        # Edit-aware text encoding (positive) — takes CLIP + VAE + source image + prompt
         "7": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"clip": ["2", 0], "text": ""},
+            "class_type": "TextEncodeQwenImageEditPlus",
+            "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image1": ["5", 0], "text": prompt},
         },
+        # Edit-aware text encoding (negative)
         "8": {
+            "class_type": "TextEncodeQwenImageEditPlus",
+            "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image1": ["5", 0], "text": ""},
+        },
+        # Model sampling config for Qwen diffusion
+        "11": {
+            "class_type": "ModelSamplingAuraFlow",
+            "inputs": {"model": ["1", 0], "shift": 8.0},
+        },
+        # CFG normalization
+        "12": {
+            "class_type": "CFGNorm",
+            "inputs": {"model": ["11", 0]},
+        },
+        # Sampler
+        "9": {
             "class_type": "KSampler",
             "inputs": {
-                "model": ["1", 0],
-                "positive": ["6", 0],
-                "negative": ["7", 0],
-                "latent_image": ["5", 0],
+                "model": ["12", 0],
+                "positive": ["7", 0],
+                "negative": ["8", 0],
+                "latent_image": ["6", 0],
                 "seed": seed,
                 "steps": steps,
                 "cfg": cfg,
@@ -241,10 +264,10 @@ def build_workflow(prompt: str, input_image: str, width: int, height: int,
                 "denoise": 1.0,
             },
         },
-        "9": {"class_type": "VAEDecode", "inputs": {"vae": ["3", 0], "samples": ["8", 0]}},
-        "10": {
+        "10": {"class_type": "VAEDecode", "inputs": {"vae": ["3", 0], "samples": ["9", 0]}},
+        "13": {
             "class_type": "SaveImage",
-            "inputs": {"images": ["9", 0], "filename_prefix": "ms_qwen_edit"},
+            "inputs": {"images": ["10", 0], "filename_prefix": "ms_qwen_edit"},
         },
     }
 
